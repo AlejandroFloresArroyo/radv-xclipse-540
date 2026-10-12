@@ -1,0 +1,16 @@
+diff --git a/src/amd/vulkan/radv_wsi.c b/src/amd/vulkan/radv_wsi.c
+index 5c8dfb1..3d1ade9 100644
+--- a/src/amd/vulkan/radv_wsi.c
++++ b/src/amd/vulkan/radv_wsi.c
+@@ -52,7 +52,10 @@ radv_wsi_get_prime_blit_queue(VkDevice _device)
+       return &device->private_sdma_queue->vk;
+    }
+ 
+-   if (pdev->info.gfx_level >= GFX9 && !(instance->debug_flags & RADV_DEBUG_NO_DMA_BLIT)) {
++   /* Xclipse (Samsung sgpu) has no SDMA engine: an SDMA queue there gets IB-less submissions that
++    * the kernel rejects with -EINVAL, so WSI blits must stay on the present queue. */
++   if (pdev->info.gfx_level >= GFX9 && pdev->info.ip[AMD_IP_SDMA].num_queues &&
++       !(instance->debug_flags & RADV_DEBUG_NO_DMA_BLIT)) {
+ 
+       uint32_t queue_family_index = pdev->num_queues;
+       for (uint32_t i = 0; i < pdev->num_queues; i++) {
