@@ -15,9 +15,9 @@ jobs:
       # JimVulkan/radv-xclipse 313870e + PR #6 (Xclipse 940 / MGFX2)
       FORK_SHA: d3f2c124c346a5e2aebfe19e8082412126db039e
       PREFIX: /opt/radv-xclipse-540
-      # The fork ships a trimmed Mesa tree without src/loader, which the Wayland WSI needs.
-      # Upstream src/loader is unchanged from 2026-09-16 to at least 2026-10-11; this is main
-      # on 2026-09-24, about where the fork branched.
+      # The fork ships a Mesa tree trimmed for Android (no src/loader, no vulkan_wayland.h, ...).
+      # Files it deleted come back from upstream main on 2026-09-24, about where the fork
+      # branched; files the fork changed are never overwritten.
       MESA_UPSTREAM_SHA: bbeb2dca9feed6ac88d71234a9dc5ae8aeed4275
     steps:
       - uses: actions/checkout@v5
@@ -37,10 +37,14 @@ jobs:
           curl -fsSL -o src.tar.gz "https://codeload.github.com/$FORK_REPO/tar.gz/$FORK_SHA"
           mkdir mesa
           tar xzf src.tar.gz -C mesa --strip-components=1
-          curl -fsSL -o loader.tar.gz \
-            "https://gitlab.freedesktop.org/mesa/mesa/-/archive/$MESA_UPSTREAM_SHA/mesa-$MESA_UPSTREAM_SHA.tar.gz?path=src/loader"
-          tar xzf loader.tar.gz -C mesa --strip-components=1
-          ls mesa/src/loader
+          curl -fsSL -o upstream.tar.gz \
+            "https://gitlab.freedesktop.org/mesa/mesa/-/archive/$MESA_UPSTREAM_SHA/mesa-$MESA_UPSTREAM_SHA.tar.gz"
+          mkdir upstream
+          tar xzf upstream.tar.gz -C upstream --strip-components=1
+          before=$(find mesa -type f | wc -l)
+          cp -r --update=none upstream/include/. mesa/include/
+          cp -r --update=none upstream/src/. mesa/src/
+          echo "restored $(( $(find mesa -type f | wc -l) - before )) files deleted by the fork"
           cd mesa
           for p in ../patches/*.diff; do echo "== $p"; git apply -v "$p"; done
 
