@@ -19,5 +19,7 @@ GitHub Actions builds it natively on an arm64 runner inside an Arch Linux ARM co
 artifact is a tarball of `/opt/radv-xclipse-540`. Select it per process with
 `VK_DRIVER_FILES=/opt/radv-xclipse-540/share/vulkan/icd.d/radeon_icd.aarch64.json`.
 
-**Untested on hardware.** A GPU hang resets the GPU shared with Android and can crash the
-launcher or reboot the device.
+**Status (2026-10-11, SM-X520):** the device enumerates, a compute dispatch is correct and an
+offscreen triangle renders pixel-exact on the graphics queue, with no GPU resets. See
+[`tests/`](tests/). Presentation, Zink and long sessions are untested. A GPU hang resets the GPU
+shared with Android and can crash the launcher or reboot the device.

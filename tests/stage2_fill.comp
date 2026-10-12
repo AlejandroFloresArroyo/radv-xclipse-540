@@ -1,0 +1,10 @@
+#version 450
+// Stage 2 test shader: each of the 64 invocations writes gid * 3 + 7 into its slot.
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) buffer Out { uint data[]; };
+
+void main()
+{
+   uint gid = gl_GlobalInvocationID.x;
+   data[gid] = gid * 3u + 7u;
+}
