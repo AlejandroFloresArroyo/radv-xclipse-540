@@ -1,0 +1,66 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    # Arch Linux ARM, so glibc/libdrm match the proot the driver runs in.
+    container: menci/archlinuxarm:base-devel
+    env:
+      FORK_REPO: yoro1836/radv-xclipse
+      # JimVulkan/radv-xclipse 313870e + PR #6 (Xclipse 940 / MGFX2)
+      FORK_SHA: d3f2c124c346a5e2aebfe19e8082412126db039e
+      PREFIX: /opt/radv-xclipse-540
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependencies
+        run: |
+          pacman-key --init >/dev/null 2>&1 || true
+          pacman-key --populate archlinuxarm >/dev/null 2>&1 || true
+          pacman -Syu --noconfirm --needed meson ninja python-mako python-yaml python-packaging \
+            python-ply glslang libdrm wayland wayland-protocols zstd libelf expat zlib bison flex git
+          ldd --version | head -1
+          pacman -Q glibc libdrm meson gcc glslang
+
+      - name: Source
+        run: |
+          curl -fsSL -o src.tar.gz "https://codeload.github.com/$FORK_REPO/tar.gz/$FORK_SHA"
+          mkdir mesa
+          tar xzf src.tar.gz -C mesa --strip-components=1
+          cd mesa
+          for p in ../patches/*.diff; do echo "== $p"; git apply -v "$p"; done
+
+      - name: Configure
+        run: |
+          cd mesa
+          meson setup build --prefix="$PREFIX" --libdir=lib \
+            -Dbuildtype=release -Db_ndebug=true \
+            -Dplatforms=wayland -Dandroid-stub=false \
+            -Dvulkan-drivers=amd -Dgallium-drivers= -Dvulkan-layers= -Dtools= \
+            -Dllvm=disabled -Dzstd=enabled -Dlmsensors=disabled -Dperfetto=false \
+            -Dglx=disabled -Dgbm=disabled -Degl=disabled -Dgles1=disabled -Dgles2=disabled \
+            -Dvideo-codecs= \
+            -Dc_args="-I$GITHUB_WORKSPACE/compat" -Dcpp_args="-I$GITHUB_WORKSPACE/compat"
+
+      - name: Build
+        run: ninja -C mesa/build
+
+      - name: Install and check
+        run: |
+          DESTDIR="$PWD/stage" meson install -C mesa/build --no-rebuild
+          find stage -type f | sort
+          so=$(find stage -name libvulkan_radeon.so | head -1)
+          echo "newest glibc symbol needed:"
+          objdump -T "$so" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1
+          grep -c XCLIPSE "$so" || true
+          tar -C stage -czf radv-xclipse-540-aarch64.tar.gz opt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: radv-xclipse-540-aarch64
+          path: radv-xclipse-540-aarch64.tar.gz

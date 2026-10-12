@@ -1,0 +1,89 @@
+diff -ru a/src/amd/common/ac_gpu_info.c b/src/amd/common/ac_gpu_info.c
+--- a/src/amd/common/ac_gpu_info.c	2026-10-11 19:49:07.450056258 -0600
++++ b/src/amd/common/ac_gpu_info.c	2026-10-11 19:49:07.562056258 -0600
+@@ -262,6 +262,8 @@
+       return AC_XCLIPSE_530;
+    if (AC_MGFX_GEN(chip_rev) == 2 && AC_MGFX_MOD(chip_rev) == 0x60)
+       return AC_XCLIPSE_940;
++   if (AC_MGFX_GEN(chip_rev) == 2 && AC_MGFX_MOD(chip_rev) == 0x30)
++      return AC_XCLIPSE_540;
+    return AC_XCLIPSE_UNKNOWN;
+ }
+ 
+@@ -291,6 +293,8 @@
+          from_soc = AC_XCLIPSE_530;
+       else if (!strcmp(soc, "s5e9945"))
+          from_soc = AC_XCLIPSE_940;
++      else if (!strcmp(soc, "s5e8855"))
++         from_soc = AC_XCLIPSE_540;
+ 
+       if (from_soc != AC_XCLIPSE_UNKNOWN && from_rev != AC_XCLIPSE_UNKNOWN &&
+           from_soc != from_rev) {
+@@ -303,7 +307,7 @@
+ 
+    RADV_LOGI("[XCLIPSE] model=%s soc='%s' (from %s) chip_rev=0x%08x gen=%u mod=0x%02x",
+              model == AC_XCLIPSE_920 ? "920" : model == AC_XCLIPSE_530 ? "530" :
+-             model == AC_XCLIPSE_940 ? "940" : "UNKNOWN",
++             model == AC_XCLIPSE_940 ? "940" : model == AC_XCLIPSE_540 ? "540" : "UNKNOWN",
+              soc[0] ? soc : "?", src, chip_rev,
+              AC_MGFX_GEN(chip_rev), AC_MGFX_MOD(chip_rev));
+    return model;
+@@ -1180,7 +1184,8 @@
+     * TITAN is its AMD codename (MGFX_MOD 0x30 = AMDGPU_IS_MGFX1_MID; the 920 is MOD 0x60 GEN 0,
+     * VOYAGER). Its context register map differs per block (ac_titan_regmap.h). gfx_level stays
+     * GFX10_3; the GFX11 shader core is carried by gfx11_shader_core. */
+-   if (info->xclipse_model == AC_XCLIPSE_530 || info->xclipse_model == AC_XCLIPSE_940) {
++   if (info->xclipse_model == AC_XCLIPSE_530 || info->xclipse_model == AC_XCLIPSE_940 ||
++       info->xclipse_model == AC_XCLIPSE_540) {
+       const char *tsrc = "default";
+       int twant = xclipse_knob_int("RADV_XCLIPSE_TITAN", "debug.radv_xclipse_titan", &tsrc);
+ 
+@@ -1253,7 +1258,8 @@
+    if (info->xclipse_model != AC_XCLIPSE_NONE) {
+       const char *src = "default";
+       int want = xclipse_knob_int("RADV_XCLIPSE_PREFETCH", "debug.radv_xclipse_prefetch", &src);
+-      info->cp_dma_prefetch = want >= 0 ? MIN2(want, 2) : info->xclipse_model == AC_XCLIPSE_940 ? 0 : 2;
++      info->cp_dma_prefetch = want >= 0 ? MIN2(want, 2) : (info->xclipse_model == AC_XCLIPSE_940 ||
++                                                         info->xclipse_model == AC_XCLIPSE_540) ? 0 : 2;
+       RADV_LOGI("[XCLIPSE] cp_dma_prefetch=%u (from %s)", info->cp_dma_prefetch, src);
+    }
+ 
+diff -ru a/src/amd/common/ac_gpu_info.h b/src/amd/common/ac_gpu_info.h
+--- a/src/amd/common/ac_gpu_info.h	2026-10-11 19:49:07.454056258 -0600
++++ b/src/amd/common/ac_gpu_info.h	2026-10-11 19:49:07.558056258 -0600
+@@ -221,6 +221,10 @@
+    AC_XCLIPSE_UNKNOWN,   /* a 0x73A0 whose SoC we do not recognise -- treat conservatively */
+    AC_XCLIPSE_940,       /* s5e9945 (Exynos 2400), MGFX2 (gen 2 mod 0x60), kernel family MGFX(147),
+                           * 12 CU, 4 L2. Runs as CHIP_TITAN (the 530's register map). */
++   AC_XCLIPSE_540,       /* s5e8855 (Exynos 1580), MGFX2_MID (gen 2 mod 0x30), kernel family
++                          * MGFX(147), 4 CU, 1 TCC, 1 RB. The s5e8855 kernel builds with
++                          * CONFIG_GPU_VERSION_M2_MID, which includes gc_10_4_0_offset_m2.h:
++                          * runs as CHIP_TITAN like the 940. */
+ };
+ 
+ struct radeon_info {
+diff -ru a/src/amd/common/ac_xclipse_log.h b/src/amd/common/ac_xclipse_log.h
+--- a/src/amd/common/ac_xclipse_log.h	2026-10-11 19:49:07.494056258 -0600
++++ b/src/amd/common/ac_xclipse_log.h	2026-10-11 19:49:07.566056258 -0600
+@@ -26,7 +26,7 @@
+ }
+ #endif
+ 
+-#ifdef __ANDROID__
++#if 1 /* Linux: <android/log.h> comes from the glibc compat include dir */
+ #include <android/log.h>
+ 
+ /* __android_log_print, but free while the level is 0: the arguments are not even evaluated. */
+diff -ru a/src/amd/vulkan/radv_queue.c b/src/amd/vulkan/radv_queue.c
+--- a/src/amd/vulkan/radv_queue.c	2026-10-11 19:49:07.454056258 -0600
++++ b/src/amd/vulkan/radv_queue.c	2026-10-11 19:49:07.566056258 -0600
+@@ -662,7 +662,8 @@
+        * gfx_v10_0_cp_gfx_start): the 530 and the 940 alike. */
+       cached = want >= 0 ? want
+                          : (pdev->info.xclipse_model == AC_XCLIPSE_530 ||
+-                            pdev->info.xclipse_model == AC_XCLIPSE_940 ? 1 : 0);
++                            pdev->info.xclipse_model == AC_XCLIPSE_940 ||
++                            pdev->info.xclipse_model == AC_XCLIPSE_540 ? 1 : 0);
+       RADV_LOGI("[XCLIPSE] ctx_init=%d (model=%d, %u regs)", cached,
+                 pdev->info.xclipse_model, (unsigned)ARRAY_SIZE(ac_xclipse_ctx_init));
+    }
