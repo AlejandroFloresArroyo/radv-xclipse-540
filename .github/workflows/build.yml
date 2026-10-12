@@ -16,13 +16,14 @@ jobs:
       FORK_SHA: d3f2c124c346a5e2aebfe19e8082412126db039e
       PREFIX: /opt/radv-xclipse-540
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Dependencies
         run: |
           pacman-key --init >/dev/null 2>&1 || true
           pacman-key --populate archlinuxarm >/dev/null 2>&1 || true
-          pacman -Syu --noconfirm --needed meson ninja python-mako python-yaml python-packaging \
+          # pacman's Landlock/alpm sandbox is not permitted inside the runner's Docker container.
+          pacman -Syu --disable-sandbox --noconfirm --needed meson ninja python-mako python-yaml python-packaging \
             python-ply glslang libdrm wayland wayland-protocols zstd libelf expat zlib bison flex git
           ldd --version | head -1
           pacman -Q glibc libdrm meson gcc glslang
