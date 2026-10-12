@@ -61,7 +61,8 @@ jobs:
             -Dc_args="-I$GITHUB_WORKSPACE/compat" -Dcpp_args="-I$GITHUB_WORKSPACE/compat"
 
       - name: Build
-        run: ninja -C mesa/build
+        # -k 0: keep going so one run reports every file that fails on glibc.
+        run: ninja -C mesa/build -k 0
 
       - name: Install and check
         run: |

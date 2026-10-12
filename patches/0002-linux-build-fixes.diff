@@ -1,0 +1,47 @@
+diff --git a/src/amd/vulkan/meta/radv_meta_bc_decode.c b/src/amd/vulkan/meta/radv_meta_bc_decode.c
+index 7de061b..3240333 100644
+--- a/src/amd/vulkan/meta/radv_meta_bc_decode.c
++++ b/src/amd/vulkan/meta/radv_meta_bc_decode.c
+@@ -22,6 +22,7 @@
+ #include "util/u_atomic.h"
+ #include "radv_cpushare.h"
+ #endif
++#include "radv_cpushare.h"
+ 
+ #ifdef __ANDROID__
+ /* [BCREPEAT]: is the app re-uploading the same textures? Counts decodes by two keys:
+diff --git a/src/amd/vulkan/radv_cpushare.h b/src/amd/vulkan/radv_cpushare.h
+index 455f458..34f6b3d 100644
+--- a/src/amd/vulkan/radv_cpushare.h
++++ b/src/amd/vulkan/radv_cpushare.h
+@@ -43,6 +43,30 @@ radv_cpushare_now(void)
+ 
+ #else /* !__ANDROID__ */
+ 
++#include <stdint.h>
++
++/* Linux builds do not time the driver; keep the call sites compiling as no-ops. */
++enum {
++   RADV_CPU_DECODE = 0,
++   RADV_CPU_SUBMIT = 1,
++   RADV_CPU_PIPELINE = 2,
++   RADV_CPU_COMPILE = 3,
++   RADV_CPU_NBUCKET
++};
++
++static inline uint64_t
++radv_cpushare_now(void)
++{
++   return 0;
++}
++
++static inline void
++radv_cpushare_add(int bucket, uint64_t ns)
++{
++   (void)bucket;
++   (void)ns;
++}
++
+ #define RADV_CPU_T0()   do {} while (0)
+ #define RADV_CPU_T1(b)  do {} while (0)
+ 
