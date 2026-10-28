@@ -28,7 +28,8 @@ jobs:
           pacman-key --populate archlinuxarm >/dev/null 2>&1 || true
           # pacman's Landlock/alpm sandbox is not permitted inside the runner's Docker container.
           pacman -Syu --disable-sandbox --noconfirm --needed meson ninja python-mako python-yaml python-packaging \
-            python-ply glslang libdrm wayland wayland-protocols zstd libelf expat zlib bison flex git
+            python-ply glslang libdrm wayland wayland-protocols zstd libelf expat zlib bison flex git \
+            libx11 libxcb libxext libxfixes libxrandr libxshmfence libxxf86vm xorgproto
           ldd --version | head -1
           pacman -Q glibc libdrm meson gcc glslang
 
@@ -53,7 +54,7 @@ jobs:
           cd mesa
           meson setup build --prefix="$PREFIX" --libdir=lib \
             -Dbuildtype=release -Db_ndebug=true \
-            -Dplatforms=wayland -Dandroid-stub=false \
+            -Dplatforms=x11,wayland -Dandroid-stub=false \
             -Dvulkan-drivers=amd -Dgallium-drivers= -Dvulkan-layers= -Dtools= \
             -Dllvm=disabled -Dzstd=enabled -Dlmsensors=disabled -Dperfetto=false \
             -Dglx=disabled -Dgbm=disabled -Degl=disabled -Dgles1=disabled -Dgles2=disabled \
